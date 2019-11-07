@@ -50,7 +50,6 @@ def make_single_dataset(image_size=[256, 128], tfrecords_path="./MARS/mars_train
 
         return image, parsed_features['image/class/label'], parsed_features['image/format']
 
-    print(type(tfrecords_path))
     filenames = [tfrecords_path]
 
     dataset = tf.data.TFRecordDataset(filenames)
