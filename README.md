@@ -60,6 +60,11 @@ This will output a similiraty score between the two images
 
 The possibilities to improve the results :
 * Using transfer learning : a pre-trained model such as VGG19 instead of training from scratch
+Transfer learning in Tensorflow without using Keras can be done with tensornets :
+```
+pip install git+https://github.com/taehoonlee/tensornets.git
+```
+
 * Change the loss function. Right now the absolute distance between the vectors is calculated but alternatives are :
     * Contrastive loss : [DeepFaceRecognition] (https://arxiv.org/pdf/1804.06655.pdf)
     * Triplet loss : [FaceNet] (https://arxiv.org/pdf/1503.03832.pdf) 
