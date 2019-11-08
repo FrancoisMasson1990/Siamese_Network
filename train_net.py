@@ -1,3 +1,15 @@
+#!/usr/bin/env python3
+'''
+Created on Nov 07, 2019
+@author: Francois Masson
+
+Usage:
+  train_net [folder]
+
+Options:
+folder          Your dataset directory (e.g: MARS PATH ROOT)
+'''
+
 import tensorflow as tf
 import os
 import glob

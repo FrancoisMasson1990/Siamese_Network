@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+'''
+Created on Nov 07, 2019
+@author: Francois Masson
+
+'''
+
 import tensorflow as tf
 import os
 import glob
