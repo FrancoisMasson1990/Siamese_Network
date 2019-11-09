@@ -48,11 +48,11 @@ def show(image_1,image_2,similarity, dissimilarity, euc, my_logits):
 
     plt.axis('off')
     ax1 = fig.add_subplot(1, 2, 1)
-    l_im = np.array(img1)[0]
+    l_im = np.array(image_1)[0]
     ax1.imshow(l_im)
     ax1.axis('off')
     ax2 = fig.add_subplot(1, 2, 2)
-    r_im = np.array(img2)[0]
+    r_im = np.array(image_2)[0]
     ax2.imshow(r_im)
     ax2.axis('off')
 
@@ -91,18 +91,17 @@ def main():
     
     logits, model_left, model_right = inference(left_input_im, right_input_im)
 
-    # # total_loss = tf.losses.get_total_loss()
     global_step = tf.Variable(0, trainable=False)
     global_init = tf.variables_initializer(tf.global_variables())
 
     saver = tf.train.Saver()
     with tf.Session() as sess:
         sess.run(global_init)
-        ckpt = tf.train.get_checkpoint_state("model") #Validate .... what to feed ...
-        saver.restore(sess, "model_siamese/model.ckpt") # Validate and provide in the readme...
+        ckpt = tf.train.get_checkpoint_state("model")
+        saver.restore(sess, "model_siamese/model.ckpt")
 
         my_logits, model_lf, model_rg = sess.run([logits, model_left, model_right], \
-                                                 feed_dict={left_input_im: img, right_input_im: img2})
+                                                 feed_dict={left_input_im: img1, right_input_im: img2})
 
         print(my_logits)
         print(np.shape(model_lf))
