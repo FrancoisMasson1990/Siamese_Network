@@ -19,13 +19,15 @@ from pathlib import Path
 
 from train_helper import *
 
-#os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 def main():
     parser = argparse.ArgumentParser(description='Training options')
     parser.add_argument('path', type=str, help='MARS_DATASET_ROOT path')
+    parser.add_argument('--transfer_learning',default=False,type=bool, help='Switch to transfer learning for the training')
+    parser.add_argument('--contrastive',default=False,type=bool, help='Switch to transfer learning for the training')
+    parser.add_argument('--model_save',default=None,type=str, help='Folder to save the config. By default : ./model_siamese/')
     arg = parser.parse_args()
-
+    print(arg.transfer_learning)
     data_filename = os.path.join(arg.path, 'data_summary.txt')
 
     with tf.gfile.Open(data_filename, 'r') as f:
@@ -42,14 +44,8 @@ def main():
     train_record = str(glob.glob(str(Path(arg.path)) + '/*train*.tfrecord')[0])
     val_record = str(glob.glob(str(Path(arg.path)) + '/*validation*.tfrecord')[0])
 
-    # train_dataset = combine_dataset(batch_size=BATCH_SIZE, image_size=[256, 128], same_prob=0.95, diff_prob=.001, train=True)
-    # val_dataset = combine_dataset(batch_size=BATCH_SIZE, image_size=[256, 128], same_prob=0.95, diff_prob=.001, train=False)
-    #train_dataset = combine_dataset(batch_size=BATCH_SIZE, image_size=[256, 128], same_prob=0.5, diff_prob=0.5, train=True)
-    #val_dataset = combine_dataset(batch_size=BATCH_SIZE, image_size=[256, 128], same_prob=0.5, diff_prob=0.5, train=False)
-    
-    ## Define two different tfrecord TODO : Validate
-    train_dataset = combine_dataset(tfrecords_path=train_record,batch_size=BATCH_SIZE, image_size=[256, 128], same_prob=0.5, diff_prob=0.5, train=True)
-    val_dataset = combine_dataset(tfrecords_path=val_record,batch_size=BATCH_SIZE, image_size=[256, 128], same_prob=0.5, diff_prob=0.5, train=False)
+    train_dataset = combine_dataset(tfrecords_path=train_record,batch_size=BATCH_SIZE, image_size=[256, 128], same_prob=0.5, diff_prob=0.5, train=True, transfer=arg.transfer_learning)
+    val_dataset = combine_dataset(tfrecords_path=val_record,batch_size=BATCH_SIZE, image_size=[256, 128], same_prob=0.5, diff_prob=0.5, train=False, transfer=arg.transfer_learning)
     handle = tf.placeholder(tf.string, shape=[])
 
     iterator = tf.data.Iterator.from_string_handle(
@@ -62,21 +58,27 @@ def main():
     left_input_im, left_label, left_addr = left
     right_input_im, right_label, right_addr = right
 
-    logits, model_left, model_right = inference(left_input_im, right_input_im)
-    loss(logits, left_label, right_label)
-    # contrastive_loss(model_left, model_right, logits, left_label, right_label, margin=0.2, use_loss=True)
+    if arg.transfer_learning:
+        logits, model_left, model_right = transfer_learning(left_input_im, right_input_im)
+    else :
+        logits, model_left, model_right = inference(left_input_im, right_input_im)
+
+    if arg.contrastive:    
+        contrastive_loss(model_left, model_right, logits, left_label, right_label, margin=0.2, use_loss=True)
+    else :
+        loss(logits, left_label, right_label)
 
     total_loss = tf.losses.get_total_loss()
     global_step = tf.Variable(0, trainable=False)
 
-    params = tf.trainable_variables()
-    gradients = tf.gradients(total_loss, params)
-
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
-    updates = optimizer.apply_gradients(zip(gradients, params), global_step=global_step)
-
-
-    global_init = tf.variables_initializer(tf.global_variables())
+    if arg.transfer_learning:
+        updates = tf.train.AdamOptimizer(learning_rate=0.001).minimize(total_loss,global_step = global_step)
+    else :
+        params = tf.trainable_variables()
+        gradients = tf.gradients(total_loss, params)
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
+        updates = optimizer.apply_gradients(zip(gradients, params), global_step=global_step)
+        global_init = tf.variables_initializer(tf.global_variables())
 
     saver = tf.train.Saver()
     with tf.Session() as sess:
@@ -112,9 +114,14 @@ def main():
             print("epoch : %d - Validation Loss : %f" % (epoch, val_loss[0]))
             print('========================================')
 
-            if not os.path.exists("./model_siamese/"):
+            if arg.model_save is None:
+                if not os.path.exists("./model_siamese/"):
                 os.makedirs("./model_siamese/")
-            saver.save(sess, "model_siamese/model.ckpt")
+                saver.save(sess, "model_siamese/model.ckpt")
+            else :
+                if not os.path.exists(arg.model_save):
+                os.makedirs(arg.model_save)
+                saver.save(sess, os.path.join(arg.model_save, "/model.ckpt"))
 
 if __name__ == "__main__":
     main()

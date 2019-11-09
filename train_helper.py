@@ -10,11 +10,10 @@ import os
 import glob
 import numpy as np
 
-from train_helper import *
+## Library used for the transfer learning
+import tensornets as nets
 
-#os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-
-def make_single_dataset(image_size=[256, 128], tfrecords_path="./MARS/mars_train_00000-of-00001.tfrecord", shuffle_buffer_size=2000, repeat=True, train=True):
+def make_single_dataset(image_size=[256, 128], tfrecords_path="./MARS/mars_train_00000-of-00001.tfrecord", shuffle_buffer_size=2000, repeat=True, train=True, transfer=False):
     """
 	Input:
 		image_size: size of input images to network
@@ -53,7 +52,11 @@ def make_single_dataset(image_size=[256, 128], tfrecords_path="./MARS/mars_train
         image = tf.reshape(image, S)
 
         image = tf.image.convert_image_dtype(image, tf.float32)
-        image = tf.image.resize_images(image, [256, 128])
+
+        if transfer :
+            image = tf.image.resize_images(image, [224, 224]) ## Use only VGG19 for this
+        else : 
+            image = tf.image.resize_images(image, [256, 128])
 
         return image, parsed_features['image/class/label'], parsed_features['image/format']
 
@@ -65,7 +68,7 @@ def make_single_dataset(image_size=[256, 128], tfrecords_path="./MARS/mars_train
     return dataset
 
 
-def combine_dataset(tfrecords_path,batch_size, image_size, same_prob, diff_prob, repeat=True, train=True):
+def combine_dataset(tfrecords_path,batch_size, image_size, same_prob, diff_prob, repeat=True, train=True, transfer=False):
     """
 	Input:
 		image size (int)
@@ -78,8 +81,8 @@ def combine_dataset(tfrecords_path,batch_size, image_size, same_prob, diff_prob,
 		zipped dataset
 
 	"""
-    dataset_left = make_single_dataset(image_size, tfrecords_path, repeat=repeat, train=train)
-    dataset_right = make_single_dataset(image_size, tfrecords_path, repeat=repeat, train=train)
+    dataset_left = make_single_dataset(image_size, tfrecords_path, repeat=repeat, train=train, transfer=transfer)
+    dataset_right = make_single_dataset(image_size, tfrecords_path, repeat=repeat, train=train, transfer=transfer)
     
     dataset = tf.data.Dataset.zip((dataset_left, dataset_right))
 
@@ -195,6 +198,21 @@ def inference(left_input_image, right_input_image):
     logits = tf.reshape(logits, [-1])
     return logits, left_features, right_features
 
+def transfer_learning(left_input_image, right_input_image):
+    """
+	left_input_image: 3D tensor input
+	right_input_image: 3D tensor input
+	label: 1 if images are from same category. 0 if not.
+	"""
+    left_features = nets.VGG19(left_input_im,is_training=True,reuse=tf.AUTO_REUSE)
+    left_features.pretrained()
+    right_features = nets.VGG19(right_input_im, is_training=True,reuse=tf.AUTO_REUSE)
+    right_features.pretrained()
+
+    merged_features = tf.abs(tf.subtract(left_features, right_features))
+    logits = tf.contrib.layers.fully_connected(merged_features, num_outputs=1, activation_fn=None)
+    logits = tf.reshape(logits, [-1])
+    return logits, left_features, right_features
 
 def loss(logits, left_label, right_label):
     label = tf.equal(left_label, right_label)
