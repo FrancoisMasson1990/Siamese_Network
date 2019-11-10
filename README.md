@@ -81,3 +81,13 @@ python3 train_net.py /path/to/train_dataset/ --transfer_learning=True --contrast
 ```
 * Play with the hyper-parameters : adding dropout, learning rate,...
 * Data augmentation
+
+<img src="images/result.png" width="779" height="414" />
+
+## First implementation :
+
+A first attempt containing the pre-trained model weights can be downloaded via :
+* [weights](https://drive.google.com/open?id=1kBZh6-E7nVFp0Mj1akH7jOqVhmBjyw4A) 
+
+Place the folder in the same level as test_net.py
+
