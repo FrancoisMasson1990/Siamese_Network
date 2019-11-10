@@ -69,11 +69,15 @@ Then used for example VGG19 pretrained model :
 ```
 python3 train_net.py /path/to/train_dataset/ --transfer_learning=True
 ```
-* Change the loss function. Right now the absolute distance between the vectors is calculated but alternatives are :
+* Change the loss function. Alternatives :
     * Contrastive loss : [DeepFaceRecognition] (https://arxiv.org/pdf/1804.06655.pdf)
     * Triplet loss : [FaceNet] (https://arxiv.org/pdf/1503.03832.pdf) 
 ```
 python3 train_net.py /path/to/train_dataset/ --contrastive=True
+```
+* Combine transfer learning and constrastive loss :
+```
+python3 train_net.py /path/to/train_dataset/ --transfer_learning=True --contrastive=True
 ```
 * Play with the hyper-parameters : adding dropout, learning rate,...
 * Data augmentation

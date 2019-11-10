@@ -22,10 +22,8 @@ import os
 import warnings
 
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '1' 
-
+## Arguments needed for the data preprocessing
 flags = tf.app.flags
-#State your dataset directory
 flags.DEFINE_string('dataset_dir', "./MARS/", 'String: Your dataset directory')
 # The number of images in the validation set. You would have to know the total number of examples in advance. This is essentially your evaluation dataset.
 flags.DEFINE_float('validation_size', 0.3, 'Float: The proportion of examples in the dataset to be used for validation')

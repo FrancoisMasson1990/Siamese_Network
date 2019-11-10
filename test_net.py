@@ -5,7 +5,7 @@ Created on Nov 08, 2019
 @author: Francois Masson
 
 Usage:
-  test_net [image1] [image2]
+  test_net [image1] [image2] <options>
 
 Options:
 image1 & image2          path to the images
@@ -18,8 +18,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 
-from test_helper import *
+from test_utils import *
 
+## Libraries optional to show the results
 from scipy.spatial.distance import cdist
 from matplotlib import gridspec
 import textwrap as tw
@@ -64,6 +65,8 @@ def main():
     parser = argparse.ArgumentParser(description='Test images')
     parser.add_argument('img1', type=str, help='Path to image 1')
     parser.add_argument('img2', type=str, help='Path to image 2')
+    parser.add_argument('--model_transfer',default=False,type=bool, help='Switch to transfer learning so resize image')
+    parser.add_argument('--model_transfer_contrastive',default=False,type=bool, help='Combine transfer learning and constrastive method')
     arg = parser.parse_args()
 
     img_one_path = arg.img1
@@ -72,8 +75,14 @@ def main():
     img1 = Image.open(img_one_path)
     img2 = Image.open(img_two_path)
 
-    left_input_im = tf.placeholder(tf.float32, [None, 256, 128, 3], 'left_input_im')
-    right_input_im = tf.placeholder(tf.float32, [None, 256, 128, 3], 'right_input_im')
+    # Resizing the placeholder according to the architecture using
+    if arg.model_transfer or arg.model_transfer_contrastive:
+        left_input_im = tf.placeholder(tf.float32, [None, 224, 224, 3], 'left_input_im')
+        right_input_im = tf.placeholder(tf.float32, [None, 224, 224, 3], 'right_input_im')
+    else :
+        left_input_im = tf.placeholder(tf.float32, [None, 256, 128, 3], 'left_input_im')
+        right_input_im = tf.placeholder(tf.float32, [None, 256, 128, 3], 'right_input_im')
+
     left_label = tf.placeholder(tf.float32, [None, ], 'left_label')
     right_label = tf.placeholder(tf.float32, [None, ], 'right_label')
 
@@ -84,12 +93,15 @@ def main():
     if np.shape(img1)[0] != np.shape(left_input_im)[1] and np.shape(img1)[1] != np.shape(left_input_im)[2]:
         img1 = img1.resize((np.shape(left_input_im)[2], np.shape(left_input_im)[1]), Image.NEAREST) 
     if np.shape(img2)[0] != np.shape(right_input_im)[1] and np.shape(img2)[1] != np.shape(right_input_im)[2]:
-        img2 = img1.resize((np.shape(right_input_im)[2], np.shape(right_input_im)[1]), Image.NEAREST) 
+        img2 = img2.resize((np.shape(right_input_im)[2], np.shape(right_input_im)[1]), Image.NEAREST) 
     
     img1 = np.array(img1)[np.newaxis, :, :, :] # Tensor compatible
     img2 = np.array(img2)[np.newaxis, :, :, :]
     
-    logits, model_left, model_right = inference(left_input_im, right_input_im)
+    if arg.model_transfer or arg.model_transfer_contrastive:
+        logits, model_left, model_right = transfer_learning(left_input_im, right_input_im)
+    else :
+        logits, model_left, model_right = inference(left_input_im, right_input_im)
 
     global_step = tf.Variable(0, trainable=False)
     global_init = tf.variables_initializer(tf.global_variables())
@@ -98,7 +110,12 @@ def main():
     with tf.Session() as sess:
         sess.run(global_init)
         ckpt = tf.train.get_checkpoint_state("model")
-        saver.restore(sess, "model_siamese/model.ckpt")
+        if arg.model_transfer:
+            saver.restore(sess, "model_siamese_transfer/model.ckpt")
+        elif arg.model_transfer_contrastive:    
+           saver.restore(sess, "model_siamese_transfer_contrastive/model.ckpt")
+        else :
+           saver.restore(sess, "model_siamese/model.ckpt") ## By default model build from scratch
 
         my_logits, model_lf, model_rg = sess.run([logits, model_left, model_right], \
                                                  feed_dict={left_input_im: img1, right_input_im: img2})
