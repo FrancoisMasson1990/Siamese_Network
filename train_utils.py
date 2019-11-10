@@ -13,6 +13,34 @@ import numpy as np
 ## Library used for the transfer learning
 import tensornets as nets
 
+def combine_dataset(tfrecords_path,batch_size, image_size, same_prob, diff_prob, repeat=True, train=True, transfer=False):
+    """
+	Input:
+		image size (int)
+		batch_size (int)
+		same_prob (float): probability of retaining images in same class
+		diff_prob (float): probability of retaining images in different class
+		train (boolean): train or validation
+		repeat (boolean): repeat elements in dataset
+	Return:
+		zipped dataset
+
+	"""
+    dataset_left = make_single_dataset(image_size, tfrecords_path, repeat=repeat, train=train, transfer=transfer)
+    dataset_right = make_single_dataset(image_size, tfrecords_path, repeat=repeat, train=train, transfer=transfer)
+    
+    dataset = tf.data.Dataset.zip((dataset_left, dataset_right))
+
+    if train:
+        filter_func = create_filter_func(same_prob, diff_prob)
+        dataset = dataset.filter(filter_func)
+    if repeat:
+        dataset = dataset.repeat()
+
+    dataset = dataset.batch(batch_size)
+    dataset = dataset.prefetch(1)
+    return dataset
+
 def make_single_dataset(image_size=[256, 128], tfrecords_path="./MARS/mars_train_00000-of-00001.tfrecord", shuffle_buffer_size=2000, repeat=True, train=True, transfer=False):
     """
 	Input:
@@ -67,54 +95,6 @@ def make_single_dataset(image_size=[256, 128], tfrecords_path="./MARS/mars_train
     dataset = dataset.map(_parse_function, num_parallel_calls=8)
     return dataset
 
-
-def combine_dataset(tfrecords_path,batch_size, image_size, same_prob, diff_prob, repeat=True, train=True, transfer=False):
-    """
-	Input:
-		image size (int)
-		batch_size (int)
-		same_prob (float): probability of retaining images in same class
-		diff_prob (float): probability of retaining images in different class
-		train (boolean): train or validation
-		repeat (boolean): repeat elements in dataset
-	Return:
-		zipped dataset
-
-	"""
-    dataset_left = make_single_dataset(image_size, tfrecords_path, repeat=repeat, train=train, transfer=transfer)
-    dataset_right = make_single_dataset(image_size, tfrecords_path, repeat=repeat, train=train, transfer=transfer)
-    
-    dataset = tf.data.Dataset.zip((dataset_left, dataset_right))
-
-    if train:
-        filter_func = create_filter_func(same_prob, diff_prob)
-        dataset = dataset.filter(filter_func)
-    if repeat:
-        dataset = dataset.repeat()
-
-    dataset = dataset.batch(batch_size)
-    dataset = dataset.prefetch(1)
-    return dataset
-
-
-def create_filter_func(same_prob, diff_prob):
-    def filter_func(left, right):
-        _, right_label, _ = left
-        _, left_label, _ = right
-
-        label_cond = tf.equal(right_label, left_label)
-
-        different_labels = tf.fill(tf.shape(label_cond), diff_prob)
-        same_labels = tf.fill(tf.shape(label_cond), same_prob)
-
-        weights = tf.where(label_cond, same_labels, different_labels)
-        random_tensor = tf.random_uniform(shape=tf.shape(weights))
-
-        return weights > random_tensor
-
-    return filter_func
-
-
 def model(input, reuse=False):
     print(np.shape(input))
     with tf.name_scope("model"):
@@ -166,6 +146,14 @@ def model(input, reuse=False):
 
     return net
 
+def loss(logits, left_label, right_label):
+    label = tf.equal(left_label, right_label)
+    label_float = tf.cast(label, tf.float64)
+
+    logits = tf.cast(logits, tf.float64)
+    cross_entropy_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=label_float)) #Using the mean distance
+    tf.losses.add_loss(cross_entropy_loss)
+
 
 def contrastive_loss(model1, model2, y, left_label, right_label, margin=0.2, use_loss=False):
     label = tf.equal(left_label, right_label)
@@ -198,27 +186,36 @@ def inference(left_input_image, right_input_image):
     logits = tf.reshape(logits, [-1])
     return logits, left_features, right_features
 
+def create_filter_func(same_prob, diff_prob):
+    def filter_func(left, right):
+        _, right_label, _ = left
+        _, left_label, _ = right
+
+        label_cond = tf.equal(right_label, left_label)
+
+        different_labels = tf.fill(tf.shape(label_cond), diff_prob)
+        same_labels = tf.fill(tf.shape(label_cond), same_prob)
+
+        weights = tf.where(label_cond, same_labels, different_labels)
+        random_tensor = tf.random_uniform(shape=tf.shape(weights))
+
+        return weights > random_tensor
+
+    return filter_func
+    
 def transfer_learning(left_input_image, right_input_image):
     """
 	left_input_image: 3D tensor input
 	right_input_image: 3D tensor input
 	label: 1 if images are from same category. 0 if not.
 	"""
-    left_features = nets.VGG19(left_input_im,is_training=True,reuse=tf.AUTO_REUSE)
+
+    left_features = nets.VGG19(left_input_image,is_training=True,reuse=tf.AUTO_REUSE)
     left_features.pretrained()
-    right_features = nets.VGG19(right_input_im, is_training=True,reuse=tf.AUTO_REUSE)
+    right_features = nets.VGG19(right_input_image, is_training=True,reuse=tf.AUTO_REUSE)
     right_features.pretrained()
 
     merged_features = tf.abs(tf.subtract(left_features, right_features))
     logits = tf.contrib.layers.fully_connected(merged_features, num_outputs=1, activation_fn=None)
     logits = tf.reshape(logits, [-1])
     return logits, left_features, right_features
-
-def loss(logits, left_label, right_label):
-    label = tf.equal(left_label, right_label)
-    label_float = tf.cast(label, tf.float64)
-
-    logits = tf.cast(logits, tf.float64)
-    cross_entropy_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=label_float))
-    tf.losses.add_loss(cross_entropy_loss)
-

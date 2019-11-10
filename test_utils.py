@@ -3,6 +3,9 @@ import os
 import glob
 import numpy as np
 
+## Library used for the transfer learning
+import tensornets as nets
+
 def model(input, reuse=False):
     print(np.shape(input))
     with tf.name_scope("model"):
@@ -64,6 +67,23 @@ def inference(left_input_image, right_input_image):
 
         left_features = model(tf.layers.batch_normalization(tf.divide(left_input_image, 255.0)))
         right_features = model(tf.layers.batch_normalization(tf.divide(right_input_image, 255.0)))
+
+    merged_features = tf.abs(tf.subtract(left_features, right_features))
+    logits = tf.contrib.layers.fully_connected(merged_features, num_outputs=1, activation_fn=None)
+    logits = tf.reshape(logits, [-1])
+    return logits, left_features, right_features
+
+def transfer_learning(left_input_image, right_input_image):
+    """
+	left_input_image: 3D tensor input
+	right_input_image: 3D tensor input
+	label: 1 if images are from same category. 0 if not.
+	"""
+
+    left_features = nets.VGG19(left_input_image,is_training=True,reuse=tf.AUTO_REUSE)
+    left_features.pretrained()
+    right_features = nets.VGG19(right_input_image, is_training=True,reuse=tf.AUTO_REUSE)
+    right_features.pretrained()
 
     merged_features = tf.abs(tf.subtract(left_features, right_features))
     logits = tf.contrib.layers.fully_connected(merged_features, num_outputs=1, activation_fn=None)
